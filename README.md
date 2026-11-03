@@ -114,12 +114,22 @@ Do đó, script [`scripts/lecoo-poweroff-fix.shutdown`](scripts/lecoo-poweroff-f
 
 ---
 
-## 5. Kinh nghiệm sử dụng chế độ Sleep (`s2idle`) trên Lecoo Pro 14 N155A
+## 5. Kết quả kiểm chứng thực tế & Kinh nghiệm dùng Sleep (`s2idle`)
 
-- **Sleep (`s2idle`) hoạt động ổn định 100%** sau khi nạp `ssdt22.aml` (`CPMGPIO0` v2) trong repo này: máy không còn bị tự thức dậy sau 1 giây như trước.
+### Kết quả đo kiểm thực tế (Verified Benchmark trên Ubuntu 26.04 / Kernel `7.0.0-42-generic`)
+
+| Hạng mục kiểm thử | Trước khi vá | Sau khi cài đặt repo này |
+|---|---|---|
+| **Shutdown (`poweroff.target`)** | Tự bật nguồn lại sau 8–10 giây | **Tắt hẳn 100%** (ổn định qua đêm & nhiều chu kỳ boot) |
+| **Sleep (`s2idle`) liên tục** | Tự tỉnh dậy ngay sau **0.5–1 giây** | Ngủ sâu liên tục **59 phút 38 giây** (`08:25:42` → `09:25:20`), không tự thức dậy |
+| **Bộ đếm ngắt GPIO khi Sleep (`/proc/interrupts`)** | `amd_gpio 24` (`0x18`) nhảy liên tục | `gpio 24, 58, 59, 11, 61, 62` đều giữ nguyên ở **`0`**; chỉ `gpio 0` (nút nguồn/nắp máy) tăng **`1`** khi mở máy |
+| **Mức tiêu thụ pin khi Sleep (`s2idle`)** | N/A (không ngủ được) | Giảm đúng **~1% pin / 1 giờ** (`19%` → `18%`, công suất nghỉ **~0.8W** trên viên pin 80.08 Wh) |
+| **Tốc độ hồi phục sau khi mở máy** | N/A | Màn hình (`amdgpu`), LAN (`r8169`), Bluetooth (`hci0`): **`< 1s`**; Wi-Fi (`wlp12s0`): **`4–5s`** |
+
+### Lưu ý khi sử dụng Sleep (`s2idle`) trên Lecoo Pro 14 N155A
 - **Cách đánh thức máy khi đang Sleep:** Vì đã cắt quyền wake của cổng USB ngoài (để tránh chuột không dây / USB Hub làm máy tự sáng màn hình trong balo), khi muốn đánh thức máy bạn hãy **nhấn phím bất kỳ trên bàn phím tích hợp của laptop, bấm nút nguồn, hoặc mở nắp màn hình**.
 - **Tuyệt đối không ép sang `deep` (S3):** CPU AMD Ryzen 7 H255 (Phoenix) trên máy này chỉ hỗ trợ chuẩn ngủ hiện đại `[s2idle]` (S0ix). Không thêm `mem_sleep_default=deep` vào GRUB vì firmware đã vô hiệu hóa S3 (`XS3`).
-- **Mức tiêu thụ pin khi Sleep:** Khoảng `~0.8% – 1.2% / giờ`. Nghỉ trưa hoặc di chuyển vài tiếng dùng Sleep rất tiện; nghỉ qua đêm nên Shutdown.
+- **Tối ưu CPU & EC đi kèm:** Hệ thống hoạt động tốt nhất với driver `amd-pstate-epp` (chế độ `balance_performance` / `balanced`) kết hợp cùng `lecoo-daemon.service` (`disorder133/lecoo-control`) để quản lý quạt và giữ giới hạn sạc pin (`Preserve` 70–80%).
 
 ---
 
