@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 patch_ssdt22.py — Binary AML patcher for Lecoo Pro 14 (N155A) SSDT-AMD-CPMGPIO0 (ssdt22.aml)
 
 Why this exists:
