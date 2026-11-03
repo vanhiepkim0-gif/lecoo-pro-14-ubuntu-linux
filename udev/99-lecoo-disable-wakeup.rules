@@ -1,0 +1,2 @@
+# Automatically disable wakeup on hot-plugged USB devices (e.g. 2.4G wireless mouse/keyboard dongles & hubs)
+ACTION=="add|change", SUBSYSTEM=="usb", TEST=="power/wakeup", ATTR{power/wakeup}="disabled"

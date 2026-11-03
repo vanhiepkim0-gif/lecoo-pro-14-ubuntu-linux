@@ -4,18 +4,41 @@
 
 case "$1" in
     poweroff|halt)
-        # 1. Disable all ACPI and sysfs wakeup sources
+        # 1. Disable all ACPI and sysfs wakeup sources (including hot-plugged USB devices)
         if [ -x /usr/local/bin/disable-wakeup.sh ]; then
             /usr/local/bin/disable-wakeup.sh >/dev/null 2>&1 || true
         fi
 
-        # 2. Bring down NICs and unbind PCI drivers that assert PME#/WAKE# during S5
+        # 2. Clear stuck EC wake/notification flags in IT5571-07 EC RAM:
+        #    - Offset 0xA7: bit 0 (WOLE), bit 4 (ECS3), bit 6 (B1PN - stuck after sleep/wake)
+        #    - Offset 0xA9: bit 0 (AIPO), bit 1 (LOPO)
+        modprobe -r ec_sys 2>/dev/null || true
+        modprobe ec_sys write_support=1 2>/dev/null || true
+        if command -v python3 >/dev/null 2>&1 && [ -e /sys/kernel/debug/ec/ec0/io ]; then
+            python3 -c '
+try:
+    with open("/sys/kernel/debug/ec/ec0/io", "r+b", buffering=0) as f:
+        f.seek(0xA7)
+        a7 = f.read(1)[0]
+        if a7 & 0x51:
+            f.seek(0xA7)
+            f.write(bytes([a7 & ~0x51]))
+        f.seek(0xA9)
+        a9 = f.read(1)[0]
+        if a9 & 0x03:
+            f.seek(0xA9)
+            f.write(bytes([a9 & ~0x03]))
+except Exception:
+    pass
+' 2>/dev/null || true
+        fi
+
+        # 3. Bring down NICs and unbind PCI drivers that assert PME#/WAKE# during S5
         for iface in /sys/class/net/*; do
             ifname=$(basename "$iface")
             [ "$ifname" != "lo" ] && ip link set "$ifname" down 2>/dev/null || true
         done
 
-        # Unbind Realtek LAN (r8169), Realtek Wi-Fi (rtw89_8852be), USB xHCI, and Thunderbolt
         for entry in \
             "r8169:0000:0b:00.0" \
             "rtw89_8852be:0000:0c:00.0" \
@@ -33,19 +56,17 @@ case "$1" in
             fi
         done
 
-        # 3. Mask & clear all active ACPI GPEs (gpe0A, gpe10, gpe16, gpe19, gpe1A, etc.)
+        # 4. Mask & clear all active ACPI GPEs (gpe0A, gpe10, gpe16, gpe19, gpe1A, etc.)
         for gpe in /sys/firmware/acpi/interrupts/gpe[0-9A-Fa-f][0-9A-Fa-f]; do
             [ -f "$gpe" ] || continue
             echo disable > "$gpe" 2>/dev/null || true
             echo clear > "$gpe" 2>/dev/null || true
         done
 
-        # 4. Set PCIEXPWAK_DIS (PEWD=1, bit 6 of PM1_EN high byte at 0x0803),
-        #    clear PCIEXPWAK_STS (PEWS=1, bit 6 of PM1_STS high byte at 0x0801),
-        #    and ensure FCH S5 bits from SPTS(5) (CLPS, SLPS, PWDE) are set.
-        if command -v python3 >/dev/null 2>&1; then
+        # 5. Set PCIEXPWAK_DIS (PEWD=1, bit 6 of PM1_EN high byte at 0x0803)
+        #    and clear PCIEXPWAK_STS (PEWS=1, bit 6 of PM1_STS high byte at 0x0801)
+        if command -v python3 >/dev/null 2>&1 && [ -c /dev/port ]; then
             python3 -c '
-import os, mmap
 try:
     with open("/dev/port", "r+b", buffering=0) as f:
         f.seek(0x803)
@@ -54,16 +75,6 @@ try:
         f.write(bytes([val | 0x40]))
         f.seek(0x801)
         f.write(bytes([0x40]))
-except Exception:
-    pass
-try:
-    fd = os.open("/dev/mem", os.O_RDWR | os.O_SYNC)
-    m = mmap.mmap(fd, 0x1000, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=0xFED80000)
-    m[0x288] |= 0x02                   # CLPS = 1
-    m[0x2B0] = (m[0x2B0] & ~0x0C) | 0x04  # SLPS = 1
-    m[0x3BB] |= 0x40                   # PWDE = 1
-    m.close()
-    os.close(fd)
 except Exception:
     pass
 ' 2>/dev/null || true
