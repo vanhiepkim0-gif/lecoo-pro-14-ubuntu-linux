@@ -1,0 +1,10 @@
+[Unit]
+Description=Disable ACPI and sysfs wakeup devices on Lecoo N155A
+After=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/disable-wakeup.sh
+
+[Install]
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

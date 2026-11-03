@@ -1,0 +1,15 @@
+[Unit]
+Description=Unbind r8169 NIC before shutdown to prevent spurious wake
+DefaultDependencies=no
+After=network.target
+Conflicts=shutdown.target poweroff.target halt.target
+Before=shutdown.target poweroff.target halt.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=/bin/sh -c 'echo 0000:0b:00.0 > /sys/bus/pci/drivers/r8169/unbind 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
