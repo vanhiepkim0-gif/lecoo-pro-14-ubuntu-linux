@@ -1,0 +1,16 @@
+[Unit]
+Description=Lecoo N155A: dump EC/ACPI wake state at boot and right before shutdown
+DefaultDependencies=no
+After=local-fs.target sys-kernel-debug.mount
+Before=shutdown.target
+Conflicts=shutdown.target
+RequiresMountsFor=/var/log
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/lecoo-diag.sh boot
+ExecStop=/usr/local/bin/lecoo-diag.sh shutdown
+
+[Install]
+WantedBy=multi-user.target

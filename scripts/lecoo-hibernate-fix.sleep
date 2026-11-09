@@ -1,0 +1,25 @@
+#!/bin/sh
+# /usr/lib/systemd/system-sleep/lecoo-hibernate-fix
+# Before hibernate (ACPI S4): apply the same wake protections as the S5 poweroff hook
+# (minus PCI driver unbinding, which would break the resumed image).
+[ "$1" = pre ] || exit 0
+case "$2" in hibernate|hybrid-sleep|suspend-then-hibernate) ;; *) exit 0;; esac
+
+/usr/local/bin/disable-wakeup.sh >/dev/null 2>&1 || true
+[ -x /usr/local/bin/lecoo-diag.sh ] && /usr/local/bin/lecoo-diag.sh pre-hibernate
+
+modprobe ec_sys write_support=1 2>/dev/null || true
+python3 - <<'EOF' 2>/dev/null || true
+try:
+    with open("/sys/kernel/debug/ec/ec0/io", "r+b", buffering=0) as f:
+        for off, mask in ((0xA7, 0x51), (0xA9, 0x03)):
+            f.seek(off); v = f.read(1)[0]
+            if v & mask:
+                f.seek(off); f.write(bytes([v & ~mask & 0xFF]))
+except Exception:
+    pass
+EOF
+for gpe in /sys/firmware/acpi/interrupts/gpe[0-9A-Fa-f][0-9A-Fa-f]; do
+    echo clear > "$gpe" 2>/dev/null || true
+done
+exit 0
